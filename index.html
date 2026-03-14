@@ -1,11 +1,561 @@
-
 <!DOCTYPE html>
-<html>
-  <head>
-    <title>Azure Static Web Apps Test</title>
-  </head>
-  <body>
-    <h1>It works ✅</h1>
-    <p>This is a test repo for Azure Static Web Apps.</p>
-  </body>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zahid CVD — TCO Calculator</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root { height: 100%; }
+    body { background: #0a1628; }
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
+    input[type=number] { -moz-appearance: textfield; }
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useMemo, useCallback } = React;
+
+    const COLORS = {
+      zahidNavy: "#0a1628",
+      zahidDeep: "#0f2240",
+      zahidBlue: "#1a3a6b",
+      zahidAccent: "#c8a44e",
+      zahidGold: "#e8c85e",
+      zahidLight: "#f4efe4",
+      volvo: "#003057",
+      volvoLight: "#4a90c4",
+      competitor: "#8b2020",
+      competitorLight: "#c45a5a",
+      positive: "#2d8a4e",
+      negative: "#c44040",
+      gridLine: "rgba(255,255,255,0.06)",
+      textMuted: "#8899aa",
+      textBody: "#c4cfdb",
+      white: "#ffffff",
+    };
+
+    const DEFAULT_INPUTS = {
+      volvoPrice: 405000,
+      competitorPrice: 180000,
+      kmPerYear: 240000,
+      fuelPrice: 2.18,
+      volvoFuelConsumption: 32,
+      competitorFuelConsumption: 38,
+      dailyRevenue: 2500,
+      tiresCostPerYear: 15000,
+      insuranceRate: 3.5,
+      operatingYears: 8,
+      recycleYear: 5,
+      competitorName: "Chinese OEM",
+      volvoResidualPct: [100, 75, 63, 53, 48, 42, 25.4, 14.5, 8],
+      competitorResidualPct: [100, 70, 55, 40, 17.5, 10, 5, 0, 0],
+      volvoMaintPerKm: [0.05, 0.06, 0.08, 0.10, 0.12, 0.18, 0.25, 0.32],
+      competitorMaintPerKm: [0.04, 0.07, 0.12, 0.18, 0.25, 0.35, 0.45, 0.55],
+      volvoDowntimeDays: [5, 7, 10, 12, 15, 20, 25, 30],
+      competitorDowntimeDays: [5, 10, 15, 22, 30, 40, 50, 60],
+    };
+
+    function formatSAR(v) {
+      if (Math.abs(v) >= 1e6) return `${(v / 1e6).toFixed(2)}M`;
+      if (Math.abs(v) >= 1e3) return `${(v / 1e3).toFixed(0)}K`;
+      return v.toFixed(0);
+    }
+
+    function computeModel(inputs) {
+      const years = [];
+      let vCum = 0, cCum = 0;
+      for (let yr = 0; yr < inputs.operatingYears; yr++) {
+        const vResPctStart = inputs.volvoResidualPct[yr] / 100;
+        const vResPctEnd = inputs.volvoResidualPct[yr + 1] / 100;
+        const cResPctStart = inputs.competitorResidualPct[yr] / 100;
+        const cResPctEnd = inputs.competitorResidualPct[yr + 1] / 100;
+
+        const vDep = (vResPctStart - vResPctEnd) * inputs.volvoPrice;
+        const cDep = (cResPctStart - cResPctEnd) * inputs.competitorPrice;
+        const vFuel = (inputs.volvoFuelConsumption / 100) * inputs.kmPerYear * inputs.fuelPrice;
+        const cFuel = (inputs.competitorFuelConsumption / 100) * inputs.kmPerYear * inputs.fuelPrice;
+        const vMaint = inputs.volvoMaintPerKm[yr] * inputs.kmPerYear;
+        const cMaint = inputs.competitorMaintPerKm[yr] * inputs.kmPerYear;
+        const vDown = inputs.volvoDowntimeDays[yr] * inputs.dailyRevenue;
+        const cDown = inputs.competitorDowntimeDays[yr] * inputs.dailyRevenue;
+        const vIns = inputs.volvoPrice * vResPctStart * (inputs.insuranceRate / 100);
+        const cIns = inputs.competitorPrice * cResPctStart * (inputs.insuranceRate / 100);
+        const vTires = inputs.tiresCostPerYear;
+        const cTires = inputs.tiresCostPerYear;
+
+        const vTotal = vDep + vFuel + vMaint + vDown + vIns + vTires;
+        const cTotal = cDep + cFuel + cMaint + cDown + cIns + cTires;
+        vCum += vTotal; cCum += cTotal;
+        const km = inputs.kmPerYear * (yr + 1);
+
+        years.push({
+          year: yr + 1,
+          volvo: { dep: vDep, fuel: vFuel, maint: vMaint, down: vDown, ins: vIns, tires: vTires, total: vTotal, cumulative: vCum, costPerKm: vCum / km, residualVal: vResPctEnd * inputs.volvoPrice, residualPct: vResPctEnd * 100 },
+          competitor: { dep: cDep, fuel: cFuel, maint: cMaint, down: cDown, ins: cIns, tires: cTires, total: cTotal, cumulative: cCum, costPerKm: cCum / km, residualVal: cResPctEnd * inputs.competitorPrice, residualPct: cResPctEnd * 100 },
+          delta: cCum - vCum, km,
+        });
+      }
+
+      let crossover = null;
+      for (let i = 0; i < years.length; i++) {
+        if (years[i].delta > 0) { crossover = years[i].year; break; }
+      }
+
+      const recYr = inputs.recycleYear;
+      const remainYears = inputs.operatingYears - recYr;
+      const recycleVolvo1Dep = inputs.volvoPrice * (1 - inputs.volvoResidualPct[recYr] / 100);
+      const recycleVolvo2Dep = remainYears > 0 ? inputs.volvoPrice * (1 - inputs.volvoResidualPct[remainYears] / 100) : 0;
+      const holdDep = inputs.volvoPrice * (1 - inputs.volvoResidualPct[inputs.operatingYears] / 100);
+
+      return {
+        years, crossover,
+        recycleAnalysis: {
+          truck1Dep: recycleVolvo1Dep, truck2Dep: recycleVolvo2Dep,
+          recycleTotalDep: recycleVolvo1Dep + recycleVolvo2Dep, holdDep, recycleYear: recYr,
+          capitalDeployed: inputs.volvoPrice * 2,
+          residualRecovered: inputs.volvoResidualPct[recYr] / 100 * inputs.volvoPrice + (inputs.volvoResidualPct[remainYears] || 0) / 100 * inputs.volvoPrice
+        }
+      };
+    }
+
+    function MiniBar({ pct, color, label, value }) {
+      return (
+        <div style={{ marginBottom: 6 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: COLORS.textMuted, marginBottom: 2 }}>
+            <span>{label}</span><span style={{ color: COLORS.textBody }}>{value}</span>
+          </div>
+          <div style={{ height: 6, background: "rgba(255,255,255,0.05)", borderRadius: 3 }}>
+            <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: color, borderRadius: 3, transition: "width 0.5s ease" }} />
+          </div>
+        </div>
+      );
+    }
+
+    function CumulativeChart({ data, maxVal }) {
+      const w = 100, h = 50;
+      const pad = { l: 0, r: 0, t: 2, b: 2 };
+      const pw = w - pad.l - pad.r, ph = h - pad.t - pad.b;
+      const n = data.length;
+      if (!n) return null;
+      const vPoints = data.map((d, i) => `${pad.l + (i / (n - 1)) * pw},${pad.t + ph - (d.volvo.cumulative / maxVal) * ph}`).join(" ");
+      const cPoints = data.map((d, i) => `${pad.l + (i / (n - 1)) * pw},${pad.t + ph - (d.competitor.cumulative / maxVal) * ph}`).join(" ");
+      return (
+        <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: 120 }}>
+          <polyline points={cPoints} fill="none" stroke={COLORS.competitorLight} strokeWidth="1" opacity="0.8" />
+          <polyline points={vPoints} fill="none" stroke={COLORS.volvoLight} strokeWidth="1" opacity="0.8" />
+          {data.map((d, i) => {
+            const x = pad.l + (i / (n - 1)) * pw;
+            return (
+              <g key={i}>
+                <circle cx={x} cy={pad.t + ph - (d.volvo.cumulative / maxVal) * ph} r="1.2" fill={COLORS.volvoLight} />
+                <circle cx={x} cy={pad.t + ph - (d.competitor.cumulative / maxVal) * ph} r="1.2" fill={COLORS.competitorLight} />
+              </g>
+            );
+          })}
+        </svg>
+      );
+    }
+
+    function DepreciationCurveChart({ volvoRes, compRes, operatingYears }) {
+      const w = 100, h = 45;
+      const pad = { l: 8, r: 2, t: 4, b: 8 };
+      const pw = w - pad.l - pad.r, ph = h - pad.t - pad.b;
+      const n = operatingYears + 1;
+      const vPoints = volvoRes.slice(0, n).map((v, i) => `${pad.l + (i / (n - 1)) * pw},${pad.t + ph - (v / 100) * ph}`).join(" ");
+      const cPoints = compRes.slice(0, n).map((v, i) => `${pad.l + (i / (n - 1)) * pw},${pad.t + ph - (v / 100) * ph}`).join(" ");
+      const vFill = `${pad.l},${pad.t + ph} ${vPoints} ${pad.l + pw},${pad.t + ph}`;
+      const cFill = `${pad.l},${pad.t + ph} ${cPoints} ${pad.l + pw},${pad.t + ph}`;
+      return (
+        <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: 140 }}>
+          <polygon points={cFill} fill={COLORS.competitorLight} opacity="0.1" />
+          <polygon points={vFill} fill={COLORS.volvoLight} opacity="0.1" />
+          <polyline points={cPoints} fill="none" stroke={COLORS.competitorLight} strokeWidth="0.8" strokeDasharray="2,1" />
+          <polyline points={vPoints} fill="none" stroke={COLORS.volvoLight} strokeWidth="0.8" />
+          {[0, 25, 50, 75, 100].map(v => (
+            <g key={v}>
+              <line x1={pad.l} y1={pad.t + ph - (v / 100) * ph} x2={pad.l + pw} y2={pad.t + ph - (v / 100) * ph} stroke={COLORS.gridLine} strokeWidth="0.2" />
+              <text x={pad.l - 1} y={pad.t + ph - (v / 100) * ph + 1} fontSize="2.5" fill={COLORS.textMuted} textAnchor="end">{v}%</text>
+            </g>
+          ))}
+          {Array.from({ length: n }).map((_, i) => (
+            <text key={i} x={pad.l + (i / (n - 1)) * pw} y={h - 1} fontSize="2.5" fill={COLORS.textMuted} textAnchor="middle">{i}</text>
+          ))}
+          {volvoRes.slice(0, n).map((v, i) => (
+            <circle key={`v${i}`} cx={pad.l + (i / (n - 1)) * pw} cy={pad.t + ph - (v / 100) * ph} r="0.9" fill={COLORS.volvoLight} />
+          ))}
+          {compRes.slice(0, n).map((v, i) => (
+            <circle key={`c${i}`} cx={pad.l + (i / (n - 1)) * pw} cy={pad.t + ph - (v / 100) * ph} r="0.9" fill={COLORS.competitorLight} />
+          ))}
+        </svg>
+      );
+    }
+
+    function TCOStackChart({ data }) {
+      if (!data.length) return null;
+      const maxV = Math.max(...data.map(d => d.volvo.total), ...data.map(d => d.competitor.total));
+      const w = 100, h = 50;
+      const pad = { l: 1, r: 1, t: 2, b: 6 };
+      const pw = w - pad.l - pad.r, ph = h - pad.t - pad.b;
+      const n = data.length;
+      const barW = pw / (n * 2.8);
+      const gap = barW * 0.3;
+      const categories = [
+        { key: "dep", color: "#2563eb" }, { key: "fuel", color: "#7c3aed" },
+        { key: "maint", color: "#dc2626" }, { key: "down", color: "#ea580c" },
+        { key: "ins", color: "#0891b2" }, { key: "tires", color: "#65a30d" },
+      ];
+      return (
+        <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: 180 }}>
+          {data.map((d, i) => {
+            const groupX = pad.l + (i / n) * pw + pw / n * 0.15;
+            let vY = pad.t + ph, cY = pad.t + ph;
+            return (
+              <g key={i}>
+                {categories.map((cat) => {
+                  const vH = (d.volvo[cat.key] / maxV) * ph;
+                  const cH = (d.competitor[cat.key] / maxV) * ph;
+                  vY -= vH; cY -= cH;
+                  return (
+                    <g key={cat.key}>
+                      <rect x={groupX} y={vY} width={barW} height={vH} fill={cat.color} opacity="0.8" rx="0.3" />
+                      <rect x={groupX + barW + gap} y={cY} width={barW} height={cH} fill={cat.color} opacity="0.4" rx="0.3" />
+                    </g>
+                  );
+                })}
+                <text x={groupX + barW + gap / 2} y={h - 1} fontSize="2.5" fill={COLORS.textMuted} textAnchor="middle">Yr{d.year}</text>
+              </g>
+            );
+          })}
+        </svg>
+      );
+    }
+
+    function InputField({ label, value, onChange, suffix, min, max, step }) {
+      return (
+        <div style={{ marginBottom: 10 }}>
+          <label style={{ display: "block", fontSize: 11, color: COLORS.textMuted, marginBottom: 3, letterSpacing: "0.03em" }}>{label}</label>
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <input type="number" value={value} onChange={e => onChange(parseFloat(e.target.value) || 0)} min={min} max={max} step={step || 1}
+              style={{ width: "100%", padding: "6px 8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 4, color: COLORS.white, fontSize: 13, outline: "none" }} />
+            {suffix && <span style={{ fontSize: 11, color: COLORS.textMuted, whiteSpace: "nowrap" }}>{suffix}</span>}
+          </div>
+        </div>
+      );
+    }
+
+    function StatCard({ label, value, sub, accent }) {
+      return (
+        <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: "12px 14px", border: `1px solid ${accent ? COLORS.zahidAccent + "33" : "rgba(255,255,255,0.06)"}` }}>
+          <div style={{ fontSize: 11, color: COLORS.textMuted, marginBottom: 4, letterSpacing: "0.04em", textTransform: "uppercase" }}>{label}</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: accent ? COLORS.zahidAccent : COLORS.white, fontFamily: "'DM Sans', sans-serif" }}>{value}</div>
+          {sub && <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}>{sub}</div>}
+        </div>
+      );
+    }
+
+    function TCOCalculator() {
+      const [inputs, setInputs] = useState(DEFAULT_INPUTS);
+      const [activeTab, setActiveTab] = useState("overview");
+      const [showAdvanced, setShowAdvanced] = useState(false);
+      const update = useCallback((key, val) => setInputs(prev => ({ ...prev, [key]: val })), []);
+      const model = useMemo(() => computeModel(inputs), [inputs]);
+      const finalYear = model.years[model.years.length - 1];
+      const maxCum = finalYear ? Math.max(finalYear.volvo.cumulative, finalYear.competitor.cumulative) : 1;
+
+      const tabs = [
+        { id: "overview", label: "Overview" },
+        { id: "depreciation", label: "Depreciation" },
+        { id: "tco", label: "Full TCO" },
+        { id: "recycle", label: "Recycle Analysis" },
+      ];
+
+      return (
+        <div style={{ fontFamily: "'DM Sans', -apple-system, sans-serif", background: `linear-gradient(170deg, ${COLORS.zahidNavy} 0%, ${COLORS.zahidDeep} 50%, #0a0f18 100%)`, color: COLORS.white, minHeight: "100vh" }}>
+          {/* Header */}
+          <div style={{ background: "rgba(0,0,0,0.3)", borderBottom: "1px solid rgba(200,164,78,0.15)", padding: "16px 20px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", maxWidth: 1100, margin: "0 auto" }}>
+              <div>
+                <div style={{ fontSize: 10, letterSpacing: "0.2em", color: COLORS.zahidAccent, textTransform: "uppercase", marginBottom: 2 }}>Zahid Commercial Vehicles</div>
+                <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, fontFamily: "'DM Serif Display', serif" }}>Total Cost of Ownership Calculator</h1>
+              </div>
+              <div style={{ fontSize: 10, color: COLORS.textMuted, textAlign: "right" }}>
+                <div style={{ color: COLORS.zahidAccent, fontWeight: 600 }}>We don't sell trucks</div>
+                <div>We sell certainty</div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ maxWidth: 1100, margin: "0 auto", padding: "16px 20px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: 20 }}>
+
+              {/* Left Panel */}
+              <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: 16, border: "1px solid rgba(255,255,255,0.06)", height: "fit-content" }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.zahidAccent, marginBottom: 12, letterSpacing: "0.06em", textTransform: "uppercase" }}>Configuration</div>
+
+                <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.volvoLight, marginBottom: 6 }}>Volvo FH4</div>
+                <InputField label="Purchase Price (SAR)" value={inputs.volvoPrice} onChange={v => update("volvoPrice", v)} />
+                <InputField label="Fuel Consumption" value={inputs.volvoFuelConsumption} onChange={v => update("volvoFuelConsumption", v)} suffix="L/100km" />
+
+                <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.competitorLight, marginBottom: 6, marginTop: 14 }}>{inputs.competitorName}</div>
+                <InputField label="Purchase Price (SAR)" value={inputs.competitorPrice} onChange={v => update("competitorPrice", v)} />
+                <InputField label="Fuel Consumption" value={inputs.competitorFuelConsumption} onChange={v => update("competitorFuelConsumption", v)} suffix="L/100km" />
+
+                <div style={{ height: 1, background: "rgba(255,255,255,0.06)", margin: "14px 0" }} />
+                <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.textBody, marginBottom: 6 }}>Operations</div>
+                <InputField label="Annual Mileage (km)" value={inputs.kmPerYear} onChange={v => update("kmPerYear", v)} />
+                <InputField label="Diesel Price" value={inputs.fuelPrice} onChange={v => update("fuelPrice", v)} suffix="SAR/L" step={0.01} />
+                <InputField label="Daily Revenue Opportunity" value={inputs.dailyRevenue} onChange={v => update("dailyRevenue", v)} suffix="SAR" />
+                <InputField label="Operating Horizon" value={inputs.operatingYears} onChange={v => update("operatingYears", Math.min(v, 8))} suffix="years" min={1} max={8} />
+                <InputField label="Recycle At Year" value={inputs.recycleYear} onChange={v => update("recycleYear", Math.min(v, 7))} suffix="years" min={1} max={7} />
+
+                <button onClick={() => setShowAdvanced(!showAdvanced)} style={{ width: "100%", padding: "8px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, color: COLORS.textMuted, fontSize: 11, cursor: "pointer", marginTop: 8 }}>
+                  {showAdvanced ? "Hide" : "Show"} Advanced Settings
+                </button>
+                {showAdvanced && (
+                  <div style={{ marginTop: 10 }}>
+                    <InputField label="Tires Cost / Year (SAR)" value={inputs.tiresCostPerYear} onChange={v => update("tiresCostPerYear", v)} />
+                    <InputField label="Insurance Rate" value={inputs.insuranceRate} onChange={v => update("insuranceRate", v)} suffix="%" step={0.1} />
+                  </div>
+                )}
+              </div>
+
+              {/* Right Panel */}
+              <div>
+                <div style={{ display: "flex", gap: 2, marginBottom: 16, background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: 3 }}>
+                  {tabs.map(t => (
+                    <button key={t.id} onClick={() => setActiveTab(t.id)}
+                      style={{ flex: 1, padding: "8px 12px", border: "none", borderRadius: 6, fontSize: 12, fontWeight: activeTab === t.id ? 600 : 400, cursor: "pointer", transition: "all 0.2s",
+                        background: activeTab === t.id ? COLORS.zahidAccent + "22" : "transparent",
+                        color: activeTab === t.id ? COLORS.zahidAccent : COLORS.textMuted }}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                {activeTab === "overview" && (
+                  <div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 16 }}>
+                      <StatCard label="Volvo 8-Yr TCO" value={`SAR ${formatSAR(finalYear?.volvo.cumulative || 0)}`} sub={`${(finalYear?.volvo.costPerKm || 0).toFixed(3)}/km`} />
+                      <StatCard label={`${inputs.competitorName} TCO`} value={`SAR ${formatSAR(finalYear?.competitor.cumulative || 0)}`} sub={`${(finalYear?.competitor.costPerKm || 0).toFixed(3)}/km`} />
+                      <StatCard label="Volvo Advantage" value={`SAR ${formatSAR(finalYear?.delta || 0)}`} sub={`${((finalYear?.delta || 0) / (finalYear?.competitor.cumulative || 1) * 100).toFixed(0)}% savings`} accent />
+                      <StatCard label="TCO Crossover" value={model.crossover ? `Year ${model.crossover}` : "—"} sub="Volvo becomes cheaper" accent />
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                      <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: 14, border: "1px solid rgba(255,255,255,0.06)" }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textBody, marginBottom: 8 }}>Cumulative TCO</div>
+                        <CumulativeChart data={model.years} maxVal={maxCum * 1.1} />
+                        <div style={{ display: "flex", gap: 16, justifyContent: "center", marginTop: 4 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: COLORS.textMuted }}><div style={{ width: 16, height: 2, background: COLORS.volvoLight, borderRadius: 1 }} /> Volvo FH4</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: COLORS.textMuted }}><div style={{ width: 16, height: 2, background: COLORS.competitorLight, borderRadius: 1 }} /> {inputs.competitorName}</div>
+                        </div>
+                      </div>
+                      <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: 14, border: "1px solid rgba(255,255,255,0.06)" }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textBody, marginBottom: 8 }}>Residual Value Curve</div>
+                        <DepreciationCurveChart volvoRes={inputs.volvoResidualPct} compRes={inputs.competitorResidualPct} operatingYears={inputs.operatingYears} />
+                        <div style={{ display: "flex", gap: 16, justifyContent: "center", marginTop: 4 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: COLORS.textMuted }}><div style={{ width: 16, height: 2, background: COLORS.volvoLight, borderRadius: 1 }} /> Volvo FH4</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: COLORS.textMuted }}><div style={{ width: 16, height: 2, background: COLORS.competitorLight, borderRadius: 1, opacity: 0.6 }} /> {inputs.competitorName}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: 14, border: "1px solid rgba(255,255,255,0.06)", marginTop: 16 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textBody, marginBottom: 10 }}>Year-by-Year TCO Advantage</div>
+                      {model.years.map(d => (
+                        <div key={d.year} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                          <div style={{ width: 36, fontSize: 11, color: COLORS.textMuted }}>Yr {d.year}</div>
+                          <div style={{ flex: 1, height: 18, background: "rgba(255,255,255,0.03)", borderRadius: 4, position: "relative", overflow: "hidden" }}>
+                            <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1, background: "rgba(255,255,255,0.1)" }} />
+                            {d.delta > 0 ? (
+                              <div style={{ position: "absolute", left: "50%", top: 2, bottom: 2, width: `${Math.min((d.delta / maxCum) * 200, 48)}%`, background: COLORS.positive, borderRadius: "0 3px 3px 0", opacity: 0.7 }} />
+                            ) : (
+                              <div style={{ position: "absolute", right: "50%", top: 2, bottom: 2, width: `${Math.min((Math.abs(d.delta) / maxCum) * 200, 48)}%`, background: COLORS.negative, borderRadius: "3px 0 0 3px", opacity: 0.7 }} />
+                            )}
+                          </div>
+                          <div style={{ width: 80, textAlign: "right", fontSize: 11, fontWeight: 600, color: d.delta > 0 ? COLORS.positive : COLORS.negative }}>
+                            {d.delta > 0 ? "+" : ""}{formatSAR(d.delta)}
+                          </div>
+                        </div>
+                      ))}
+                      <div style={{ display: "flex", justifyContent: "center", gap: 16, marginTop: 8, fontSize: 10, color: COLORS.textMuted }}>
+                        <span style={{ color: COLORS.negative }}>◄ {inputs.competitorName} cheaper</span>
+                        <span style={{ color: COLORS.positive }}>Volvo cheaper ►</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === "depreciation" && (
+                  <div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                      <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: 14, border: "1px solid rgba(255,255,255,0.06)" }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.volvoLight, marginBottom: 10 }}>Volvo FH4 — SAR {inputs.volvoPrice.toLocaleString()}</div>
+                        {model.years.map(d => (
+                          <MiniBar key={d.year} pct={d.volvo.residualPct} color={COLORS.volvoLight} label={`Year ${d.year}`} value={`${d.volvo.residualPct.toFixed(1)}% — SAR ${formatSAR(d.volvo.residualVal)}`} />
+                        ))}
+                      </div>
+                      <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: 14, border: "1px solid rgba(255,255,255,0.06)" }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.competitorLight, marginBottom: 10 }}>{inputs.competitorName} — SAR {inputs.competitorPrice.toLocaleString()}</div>
+                        {model.years.map(d => (
+                          <MiniBar key={d.year} pct={d.competitor.residualPct} color={COLORS.competitorLight} label={`Year ${d.year}`} value={`${d.competitor.residualPct.toFixed(1)}% — SAR ${formatSAR(d.competitor.residualVal)}`} />
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ background: `linear-gradient(135deg, ${COLORS.zahidAccent}11, ${COLORS.zahidAccent}06)`, borderRadius: 10, padding: 14, border: `1px solid ${COLORS.zahidAccent}22` }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.zahidAccent, marginBottom: 6 }}>⚠ The Depreciation Cliff</div>
+                      <div style={{ fontSize: 12, color: COLORS.textBody, lineHeight: 1.6 }}>
+                        The Volvo FH4 experiences a significant residual value drop at Year 6 (from {inputs.volvoResidualPct[5]}% to {inputs.volvoResidualPct[6]}%), losing {(inputs.volvoResidualPct[5] - inputs.volvoResidualPct[6]).toFixed(1)}pp in a single year. However, even at Year 8, the Volvo retains SAR {formatSAR(inputs.volvoPrice * inputs.volvoResidualPct[8] / 100)} vs the {inputs.competitorName}'s SAR {formatSAR(inputs.competitorPrice * inputs.competitorResidualPct[8] / 100)}.
+                      </div>
+                    </div>
+                    <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: 14, border: "1px solid rgba(255,255,255,0.06)", marginTop: 16, overflowX: "auto" }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textBody, marginBottom: 10 }}>Depreciation Cost per Kilometer</div>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                        <thead>
+                          <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+                            <th style={{ padding: "6px 8px", textAlign: "left", color: COLORS.textMuted, fontWeight: 500 }}>Exit Year</th>
+                            <th style={{ padding: "6px 8px", textAlign: "right", color: COLORS.volvoLight, fontWeight: 500 }}>Volvo Dep</th>
+                            <th style={{ padding: "6px 8px", textAlign: "right", color: COLORS.volvoLight, fontWeight: 500 }}>SAR/km</th>
+                            <th style={{ padding: "6px 8px", textAlign: "right", color: COLORS.competitorLight, fontWeight: 500 }}>{inputs.competitorName} Dep</th>
+                            <th style={{ padding: "6px 8px", textAlign: "right", color: COLORS.competitorLight, fontWeight: 500 }}>SAR/km</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {model.years.map(d => {
+                            const vCumDep = inputs.volvoPrice * (1 - d.volvo.residualPct / 100);
+                            const cCumDep = inputs.competitorPrice * (1 - d.competitor.residualPct / 100);
+                            return (
+                              <tr key={d.year} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                                <td style={{ padding: "6px 8px", color: COLORS.textBody }}>Year {d.year}</td>
+                                <td style={{ padding: "6px 8px", textAlign: "right", color: COLORS.textBody }}>SAR {formatSAR(vCumDep)}</td>
+                                <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 600, color: COLORS.volvoLight }}>{(vCumDep / d.km).toFixed(4)}</td>
+                                <td style={{ padding: "6px 8px", textAlign: "right", color: COLORS.textBody }}>SAR {formatSAR(cCumDep)}</td>
+                                <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 600, color: COLORS.competitorLight }}>{(cCumDep / d.km).toFixed(4)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === "tco" && (
+                  <div>
+                    <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: 14, border: "1px solid rgba(255,255,255,0.06)", marginBottom: 16 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textBody, marginBottom: 8 }}>Annual TCO Breakdown (solid = Volvo, faded = {inputs.competitorName})</div>
+                      <TCOStackChart data={model.years} />
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "center", marginTop: 6 }}>
+                        {[{ c: "#2563eb", l: "Depreciation" }, { c: "#7c3aed", l: "Fuel" }, { c: "#dc2626", l: "Maintenance" }, { c: "#ea580c", l: "Downtime" }, { c: "#0891b2", l: "Insurance" }, { c: "#65a30d", l: "Tires" }].map(x => (
+                          <div key={x.l} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: COLORS.textMuted }}><div style={{ width: 8, height: 8, borderRadius: 2, background: x.c }} />{x.l}</div>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: 14, border: "1px solid rgba(255,255,255,0.06)", overflowX: "auto" }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textBody, marginBottom: 10 }}>Detailed TCO Comparison (SAR)</div>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
+                        <thead>
+                          <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+                            {["Year","V-Dep","V-Fuel","V-Maint","V-Down","V-Total","C-Dep","C-Fuel","C-Maint","C-Down","C-Total","Delta"].map((h, i) => (
+                              <th key={h} style={{ padding: "5px 6px", textAlign: i === 0 ? "left" : "right", color: i < 6 ? COLORS.volvoLight : i < 11 ? COLORS.competitorLight : COLORS.zahidAccent, fontWeight: i === 0 ? 400 : 500 }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {model.years.map(d => (
+                            <tr key={d.year} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                              <td style={{ padding: "5px 6px", color: COLORS.textBody }}>Yr {d.year}</td>
+                              {[d.volvo.dep, d.volvo.fuel, d.volvo.maint, d.volvo.down].map((v, i) => (
+                                <td key={i} style={{ padding: "5px 6px", textAlign: "right", color: COLORS.textBody }}>{formatSAR(v)}</td>
+                              ))}
+                              <td style={{ padding: "5px 6px", textAlign: "right", color: COLORS.volvoLight, fontWeight: 600 }}>{formatSAR(d.volvo.total)}</td>
+                              {[d.competitor.dep, d.competitor.fuel, d.competitor.maint, d.competitor.down].map((v, i) => (
+                                <td key={i} style={{ padding: "5px 6px", textAlign: "right", color: COLORS.textBody }}>{formatSAR(v)}</td>
+                              ))}
+                              <td style={{ padding: "5px 6px", textAlign: "right", color: COLORS.competitorLight, fontWeight: 600 }}>{formatSAR(d.competitor.total)}</td>
+                              <td style={{ padding: "5px 6px", textAlign: "right", fontWeight: 700, color: d.delta > 0 ? COLORS.positive : COLORS.negative }}>{d.delta > 0 ? "+" : ""}{formatSAR(d.delta)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === "recycle" && (
+                  <div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                      <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: 16, border: "1px solid rgba(255,255,255,0.06)" }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.volvoLight, marginBottom: 12 }}>Strategy A: Hold {inputs.operatingYears} Years</div>
+                        <div style={{ fontSize: 11, color: COLORS.textMuted, marginBottom: 4 }}>Capital deployed</div>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: COLORS.white, marginBottom: 10 }}>SAR {inputs.volvoPrice.toLocaleString()}</div>
+                        <div style={{ fontSize: 11, color: COLORS.textMuted, marginBottom: 4 }}>Total depreciation</div>
+                        <div style={{ fontSize: 18, fontWeight: 600, color: COLORS.white, marginBottom: 10 }}>SAR {formatSAR(model.recycleAnalysis.holdDep)}</div>
+                        <div style={{ fontSize: 11, color: COLORS.textMuted, marginBottom: 4 }}>Residual at exit</div>
+                        <div style={{ fontSize: 16, fontWeight: 600, color: COLORS.positive }}>SAR {formatSAR(inputs.volvoPrice - model.recycleAnalysis.holdDep)}</div>
+                        <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 6 }}>Cost/km (dep. only)</div>
+                        <div style={{ fontSize: 16, fontWeight: 600, color: COLORS.white }}>{(model.recycleAnalysis.holdDep / (inputs.kmPerYear * inputs.operatingYears)).toFixed(4)} SAR</div>
+                      </div>
+                      <div style={{ background: `linear-gradient(135deg, ${COLORS.zahidAccent}08, rgba(255,255,255,0.02))`, borderRadius: 10, padding: 16, border: `1px solid ${COLORS.zahidAccent}22` }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.zahidAccent, marginBottom: 12 }}>Strategy B: Recycle at Year {inputs.recycleYear}</div>
+                        <div style={{ fontSize: 10, color: COLORS.textMuted, marginBottom: 8 }}>({inputs.recycleYear}yr + {inputs.operatingYears - inputs.recycleYear}yr to cover {inputs.operatingYears} years)</div>
+                        <div style={{ fontSize: 11, color: COLORS.textMuted, marginBottom: 4 }}>Capital deployed (2 trucks)</div>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: COLORS.white, marginBottom: 10 }}>SAR {(inputs.volvoPrice * 2).toLocaleString()}</div>
+                        <div style={{ fontSize: 11, color: COLORS.textMuted, marginBottom: 4 }}>Total depreciation</div>
+                        <div style={{ fontSize: 18, fontWeight: 600, color: COLORS.white, marginBottom: 2 }}>SAR {formatSAR(model.recycleAnalysis.recycleTotalDep)}</div>
+                        <div style={{ fontSize: 10, color: COLORS.textMuted, marginBottom: 10 }}>Truck 1: SAR {formatSAR(model.recycleAnalysis.truck1Dep)} + Truck 2: SAR {formatSAR(model.recycleAnalysis.truck2Dep)}</div>
+                        <div style={{ fontSize: 11, color: COLORS.textMuted, marginBottom: 4 }}>Total residual recovered</div>
+                        <div style={{ fontSize: 16, fontWeight: 600, color: COLORS.positive }}>SAR {formatSAR(model.recycleAnalysis.residualRecovered)}</div>
+                        <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 6 }}>Cost/km (dep. only)</div>
+                        <div style={{ fontSize: 16, fontWeight: 600, color: COLORS.white }}>{(model.recycleAnalysis.recycleTotalDep / (inputs.kmPerYear * inputs.operatingYears)).toFixed(4)} SAR</div>
+                      </div>
+                    </div>
+                    <div style={{ background: model.recycleAnalysis.recycleTotalDep > model.recycleAnalysis.holdDep ? "rgba(200,64,64,0.08)" : "rgba(45,138,78,0.08)", borderRadius: 10, padding: 16, border: `1px solid ${model.recycleAnalysis.recycleTotalDep > model.recycleAnalysis.holdDep ? "rgba(200,64,64,0.2)" : "rgba(45,138,78,0.2)"}` }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.white, marginBottom: 6 }}>
+                        {model.recycleAnalysis.recycleTotalDep > model.recycleAnalysis.holdDep
+                          ? `⚠ Recycling costs SAR ${formatSAR(model.recycleAnalysis.recycleTotalDep - model.recycleAnalysis.holdDep)} MORE in depreciation`
+                          : `✓ Recycling saves SAR ${formatSAR(model.recycleAnalysis.holdDep - model.recycleAnalysis.recycleTotalDep)} in depreciation`}
+                      </div>
+                      <div style={{ fontSize: 12, color: COLORS.textBody, lineHeight: 1.6 }}>
+                        {model.recycleAnalysis.recycleTotalDep > model.recycleAnalysis.holdDep
+                          ? `The recycling strategy requires 2× capital deployment (SAR ${(inputs.volvoPrice * 2).toLocaleString()}) and results in higher total depreciation. However, the client benefits from always operating newer equipment with lower maintenance costs, better fuel efficiency, and higher uptime.`
+                          : `The recycling strategy results in lower total depreciation while keeping the fleet fresher with lower maintenance costs. This is the optimal approach on both depreciation and TCO metrics.`}
+                      </div>
+                    </div>
+                    <div style={{ background: `linear-gradient(135deg, ${COLORS.zahidAccent}11, ${COLORS.zahidAccent}05)`, borderRadius: 10, padding: 16, border: `1px solid ${COLORS.zahidAccent}22`, marginTop: 16 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.zahidAccent, marginBottom: 8 }}>The Zahid Certainty Recommendation</div>
+                      <div style={{ fontSize: 12, color: COLORS.textBody, lineHeight: 1.7 }}>
+                        Whether your client operates for 5 or 8 years, the Volvo FH4 delivers lower total cost of ownership from Year {model.crossover || 3} onward. The {inputs.competitorName}'s lower sticker price is an illusion — fuel inefficiency ({inputs.competitorFuelConsumption} vs {inputs.volvoFuelConsumption} L/100km), accelerating maintenance costs, and punishing downtime erode the purchase price advantage within {model.crossover || 3} years. By Year {inputs.operatingYears}, the Volvo has saved the operator SAR {formatSAR(finalYear?.delta || 0)} in total cost of ownership.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ marginTop: 20, padding: "12px 0", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontSize: 10, color: COLORS.textMuted }}>
+                    Assumptions: {inputs.kmPerYear.toLocaleString()} km/yr · SAR {inputs.fuelPrice}/L diesel · {inputs.insuranceRate}% insurance rate
+                  </div>
+                  <div style={{ fontSize: 10, color: COLORS.zahidAccent, letterSpacing: "0.1em" }}>store.zahid.com</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<TCOCalculator />);
+  </script>
+</body>
 </html>
